@@ -1,0 +1,41 @@
+Additional properities:
+    1. add to_listform method in Game object
+        In order to reduce the size on returning active game for user,
+        I make a new method to avoid return full game information.
+    2. add _choose_random_word method in HangmanApi
+        Prepare a local word pool for random select word.
+    3. change new_game request with mode selection
+        easy: from 0(draw gallow) to 11(stop on hangman mouth)
+        normal: form 2(draw hangman head) to 11(stop on hangman mouth)
+        hard: from 2(draw hangman head) to 8(stop on hangman right leg)
+    4. Progress Number for hangman as following definition:
+        0: draw Gallow
+        1: draw String
+        2: draw hangman head
+        3: draw hangman left hand
+        4: draw hangman right hand
+        5: draw hangman body
+        6: draw hangman left leg
+        7: draw hangman right leg
+        8: draw hangman left eye on face
+        9: draw hangman right eye on face
+        10: draw hangman mouth on face
+    5. Add history in Game object
+        For playback the guess progress, I use a list to record input sequence.
+        And go through make guess process and record in get_game_history endpoint.
+    6. Modify SendReminderEmail
+        Only send email for who has email and active game.
+    
+Struggles:
+    1. get_user_rankings endpoint implementation
+        I encounter to store data in Datastore or Python list to order the ranking.
+        Finally I order it by Python to reduce the model object.
+    2. Link score object with game object
+        For the sack of reducing three score object column: input history, word in game and game url key.
+        Make game object as a reference in score object to reduce the Datastore space.
+    3. Normalized score definition
+        The normalized score shold proportional to remaing attemps and target word length,
+        but inversely proportional to game mode and guess counts.
+        Therefore, I minus the difference between guess counts and target word length,
+        and divide by the average from game mode (attempts limit) and guess length to make score looks better.
+        
