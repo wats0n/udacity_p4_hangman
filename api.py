@@ -17,6 +17,9 @@ from models import StringMessage, NewGameForm, GameForm, MakeMoveForm,\
     GameHistoryForms
 from utils import get_by_urlsafe
 
+from settings import WEB_CLIENT_ID
+from settings import OTHER_ID
+
 NEW_GAME_REQUEST = endpoints.ResourceContainer(NewGameForm)
 GET_GAME_REQUEST = endpoints.ResourceContainer(
         urlsafe_game_key=messages.StringField(1),)
@@ -45,7 +48,9 @@ hangman_msg = [
     'Draw Middle Mouth~',
 ]
 
-@endpoints.api(name='hangman', version='v1')
+@endpoints.api(name='hangman', version='v1',
+    allowed_client_ids=[WEB_CLIENT_ID, OTHER_ID,
+                        endpoints.API_EXPLORER_CLIENT_ID])
 class HangmanApi(remote.Service):
     """Game API"""
     @endpoints.method(request_message=USER_REQUEST,
@@ -101,8 +106,20 @@ class HangmanApi(remote.Service):
         # This operation is not needed to complete the creation of a new game
         # so it is performed out of sequence.
         taskqueue.add(url='/tasks/cache_average_attempts')
-        return game.to_form(msg, '_'*len(game.target_word))
+        return game.to_form(msg)
 
+    def _update_guess(self, game, guess):
+        """ Update guess word in game"""
+        if game:
+            guess_string = game.guess_string
+            if(guess not in game.history):
+                for i in range(len(game.target_word)):
+                    if(game.target_word[i] == guess):
+                        guess_string = guess_string[:i] + guess \
+                                       + guess_string[i+1:]
+                game.guess_string = guess_string
+                game.history.append(guess)
+        
     @endpoints.method(request_message=GET_GAME_REQUEST,
                       response_message=GameForm,
                       path='game/{urlsafe_game_key}',
@@ -112,20 +129,14 @@ class HangmanApi(remote.Service):
         """Return the current game state."""
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
         if game:
-            guess_string = ''
-            for s in game.target_word:
-                if(s in game.history):
-                    guess_string += s
-                else:
-                    guess_string += '_'
             if(game.game_over == True):
                 if (guess_string == game.target_word):
-                    return game.to_form('You Win!', guess_string)
+                    return game.to_form('You Win!')
                 else:
-                    return game.to_form('Game Over!', guess_string)
+                    return game.to_form('Game Over!')
             else:
                 return game.to_form(hangman_msg[game.attempts_progress]+
-                                ' ,Time to make a move!', guess_string)
+                                ' ,Time to make a move!')
         else:
             raise endpoints.NotFoundException('Game not found!')
 
@@ -136,7 +147,11 @@ class HangmanApi(remote.Service):
                       http_method='PUT')
     def make_move(self, request):
         """Makes a move. Returns a game state with message"""
+
         game = get_by_urlsafe(request.urlsafe_game_key, Game)
+
+        if not game:
+            raise endpoints.NotFoundException('Game not found!')
         
         if game.game_over:
             return game.to_form('Game already over!', game.target_word)
@@ -146,41 +161,24 @@ class HangmanApi(remote.Service):
         if(len(lguess) == 0):
             raise endpoints.BadRequestException('Please input character!')
         else:
-            if(lguess[0] in game.history):
-                guess_string = ''
-                for s in game.target_word:
-                    if(s in game.history):
-                        guess_string += s
-                    else:
-                        guess_string += '_'
-                return game.to_form(str(request.guess[0])+",has been submit",
-                                    game.target_word)
-            else:
-                game.history.append(request.guess[0])
+            self._update_guess(game, lguess[0])
 
         game.attempts_count += 1
         if not (lguess[0] in game.target_word):
             game.attempts_progress += 1;
         
-        guess_string = ''
-        for s in game.target_word:
-            if(s in game.history):
-                guess_string += s
-            else:
-                guess_string += '_'
-        
-        if (guess_string == game.target_word):
+        if (game.guess_string == game.target_word):
             game.end_game(True);
-            return game.to_form('You win! Still Alive!', guess_string)
+            return game.to_form('You win! Still Alive!')
         
         if (game.attempts_progress >= game.attempts_limit):
             game.end_game(False)
             return game.to_form(hangman_msg[game.attempts_progress] +
-                                ' Game over!', game.target_word)
+                                ' Game over!')
         else:
             game.put()
             return game.to_form(hangman_msg[game.attempts_progress] +
-                                ' then next move', guess_string)
+                                ' then next move')
 
     @endpoints.method(response_message=ScoreForms,
                       path='scores',
@@ -267,9 +265,10 @@ class HangmanApi(remote.Service):
         for u in users:
             scores = Score.query(Score.user == u.key)
             avg = 0.0
-            for s in scores:
-                avg += s.norm_score
-            avg /= scores.count()
+            if(scores.count()):
+                for s in scores:
+                    avg += s.norm_score
+                avg /= scores.count()
             avg_rank.append([avg, u.name])
         avg_rank = sorted(avg_rank, reverse=True)
         return UserRankForms(items=[UserRankForm(user_name=a[1],

@@ -19,13 +19,8 @@ def get_by_urlsafe(urlsafe, model):
         ValueError:"""
     try:
         key = ndb.Key(urlsafe=urlsafe)
-    except TypeError:
-        raise endpoints.BadRequestException('Invalid Key')
-    except Exception, e:
-        if e.__class__.__name__ == 'ProtocolBufferDecodeError':
-            raise endpoints.BadRequestException('Invalid Key')
-        else:
-            raise
+    except:
+        return None
 
     entity = key.get()
     if not entity:

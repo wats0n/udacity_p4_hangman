@@ -18,6 +18,7 @@ class Game(ndb.Model):
     """Game object"""
     user = ndb.KeyProperty(required=True, kind='User')
     target_word = ndb.StringProperty(required=True)
+    guess_string = ndb.StringProperty(required=True)
     attempts_count = ndb.IntegerProperty(required=True, default=0)
     attempts_progress = ndb.IntegerProperty(required=True, default=2)
     attempts_limit = ndb.IntegerProperty(required=True, default=8)
@@ -32,12 +33,13 @@ class Game(ndb.Model):
                     attempts_count = 0,
                     attempts_progress = attempts_progress,
                     attempts_limit = attemps_limit,
-                    game_over = False)
-        game.history = []
+                    game_over = False,
+                    history = [],
+                    guess_string = '_'*len(target_word))
         game.put()
         return game
 
-    def to_form(self, message, guess_string):
+    def to_form(self, message):
         """Returns a GameForm representation of the Game"""
         form = GameForm()
         form.urlsafe_key = self.key.urlsafe()
@@ -45,7 +47,7 @@ class Game(ndb.Model):
         form.attempts_count = self.attempts_count
         form.game_over = self.game_over
         form.message = message
-        form.guess_string = guess_string
+        form.guess_string = self.guess_string
         form.history = str(self.history)
         return form
 
